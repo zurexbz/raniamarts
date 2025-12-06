@@ -12,7 +12,7 @@ code {
     monospace;
 }
 
-.icon {
-  width: 100px;
-  height: auto;
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
 }
