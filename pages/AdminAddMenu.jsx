@@ -1,409 +1,372 @@
-import React, { useMemo, useRef, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {ChevronDown, UploadCloud, Image as ImageIcon, ArrowLeft, LogOut} from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { ArrowLeft, UploadCloud, Image as ImageIcon, ChevronDown } from "lucide-react";
 
-const TYPE_OPTIONS = ["Main Course", "Beverage", "Snack"];
-
-const formatIDR = (n) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(Number(n || 0));
+const API_BASE = "http://localhost:8080/api/v1";
 
 export default function AddMenu() {
   const navigate = useNavigate();
-  const fileRef = useRef(null);
+  const location = useLocation();
 
-  // Profile Menu Handle
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef(null);
+  // ==== MODE: ADD vs EDIT ====
+  const isEdit = location.state?.mode === "edit";
+  const editingProduct = location.state?.product || null;
+  const editingId = location.state?.productId || editingProduct?.id || null;
 
-  useEffect(() => {
-    const onClickOutside = (e) => {
-      if (!profileRef.current) return;
-      if (!profileRef.current.contains(e.target)) {
-        setProfileOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("rm_token");
-    localStorage.removeItem("rm_user");
-    sessionStorage.removeItem("rm_token");
-    sessionStorage.removeItem("rm_user");
-    navigate("/login");
-  };
-
-  // Profile Menu Display Name
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const raw =
-      localStorage.getItem("rm_user") || sessionStorage.getItem("rm_user");
-
-    try {
-      setUser(raw ? JSON.parse(raw) : null);
-    } catch {
-      setUser(null);
-    }
-  }, []);
-
-  const displayName = user?.name || "My Profile";
-  const avatarLetter = (user?.name || "U").charAt(0).toUpperCase();
-
-  // Form Handle
-  const [name, setName] = useState("");
-  const [type, setType] = useState("Main Course");
-  const [price, setPrice] = useState("");
-  const [description, setDescription] = useState("");
-  const [stock, setStock] = useState("");
+  // ==== FORM STATE ====
+  const [namaMenu, setNamaMenu] = useState("");
+  const [tipeMenu, setTipeMenu] = useState("");
+  const [harga, setHarga] = useState("");
+  const [deskripsi, setDeskripsi] = useState("");
+  const [stok, setStok] = useState("");
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
-  const [dragOver, setDragOver] = useState(false);
+  // ==== UI STATE ====
+  const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const imagePreview = useMemo(() => {
-    if (!imageFile) return null;
-    return URL.createObjectURL(imageFile);
-  }, [imageFile]);
+  // Prefill form kalau mode EDIT
+  useEffect(() => {
+    if (isEdit && editingProduct) {
+      setNamaMenu(editingProduct.name || "");
+      setTipeMenu(editingProduct.type || "");
+      setHarga(editingProduct.price ?? "");
+      setDeskripsi(editingProduct.description || "");
+      setStok(editingProduct.stock ?? "");
+      if (editingProduct.image) {
+        setImagePreview(editingProduct.image); 
+      }
+    }
+  }, [isEdit, editingProduct]);
 
   useEffect(() => {
     return () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      if (imagePreview && imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
     };
   }, [imagePreview]);
 
-  const canSubmit =
-    name.trim() &&
-    type.trim() &&
-    String(price).trim() !== "" &&
-    Number(price) > 0 &&
-    description.trim() &&
-    String(stock).trim() !== "" &&
-    Number(stock) >= 0;
-
-  const handlePickFile = () => {
-    fileRef.current?.click();
-  };
-
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setErrorMsg("File harus berupa gambar (jpg/png).");
-      return;
-    }
-
-    setErrorMsg("");
     setImageFile(file);
+    if (imagePreview && imagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImagePreview(URL.createObjectURL(file));
   };
 
-  const handleDragOver = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    setDragOver(true);
-  };
+    setErrorMsg("");
+    setSuccessMsg("");
 
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setErrorMsg("File harus berupa gambar (jpg/png).");
+    if (!namaMenu.trim()) {
+      setErrorMsg("Nama menu wajib diisi.");
+      return;
+    }
+    if (!tipeMenu) {
+      setErrorMsg("Tipe menu wajib dipilih.");
+      return;
+    }
+    if (!harga || Number(harga) <= 0) {
+      setErrorMsg("Harga wajib diisi dan harus lebih dari 0.");
+      return;
+    }
+    if (!stok || Number(stok) < 0) {
+      setErrorMsg("Stok wajib diisi dan tidak boleh negatif.");
       return;
     }
 
-    setErrorMsg("");
-    setImageFile(file);
-  };
+    const token =
+      localStorage.getItem("rm_token") || sessionStorage.getItem("rm_token");
 
-  const removeImage = () => {
-    setImageFile(null);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMsg("");
-
-    if (!canSubmit) {
-      setErrorMsg("Mohon lengkapi data wajib terlebih dahulu.");
+    if (!token) {
+      setErrorMsg("Sesi login berakhir. Silakan login kembali.");
+      navigate("/login");
       return;
     }
 
-    const payload = {
-      name,
-      type,
-      price: Number(price),
-      description,
-      stock: Number(stock),
-    };
+    const formData = new FormData();
+    formData.append("nama_menu", namaMenu.trim());
+    formData.append("tipe_menu", tipeMenu);
+    formData.append("harga", String(harga));
+    formData.append("deskripsi", deskripsi.trim());
+    formData.append("stok", String(stok));
 
-    console.log("ADD MENU PAYLOAD:", payload, imageFile);
+    if (imageFile) {
+      formData.append("Menu", imageFile);
+    }
 
-    alert("Form OK (nanti kita sambungkan ke API)");
-    navigate("/admin");
+    const url = isEdit
+      ? `${API_BASE}/admin/product/${editingId}/update`
+      : `${API_BASE}/admin/product/create`;
+    const method = isEdit ? "PATCH" : "POST";
+
+    try {
+      setSubmitting(true);
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || data?.error) {
+        const msg =
+          data?.message ||
+          data?.error ||
+          `Gagal ${isEdit ? "mengupdate" : "menyimpan"} menu.`;
+        throw new Error(msg);
+      }
+
+      setSuccessMsg(
+        isEdit ? "Menu berhasil diupdate 🎉" : "Menu berhasil ditambahkan 🎉"
+      );
+      setErrorMsg("");
+
+      if (!isEdit) {
+        setNamaMenu("");
+        setTipeMenu("");
+        setHarga("");
+        setDeskripsi("");
+        setStok("");
+        setImageFile(null);
+        if (imagePreview && imagePreview.startsWith("blob:")) {
+          URL.revokeObjectURL(imagePreview);
+        }
+        setImagePreview(null);
+      } else {
+        setTimeout(() => {
+          navigate("/admin");
+        }, 1200);
+      }
+    } catch (err) {
+      setErrorMsg(
+        err.message ||
+          `Terjadi kesalahan saat ${isEdit ? "mengupdate" : "menyimpan"} menu.`
+      );
+      setSuccessMsg("");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const title = isEdit ? "Edit Menu" : "Add Menu Baru";
+  const subtitle = isEdit
+    ? "Perbarui informasi menu yang sudah ada di RaniaMart."
+    : "Tambahkan menu baru ke RaniaMart lengkap dengan informasi dan gambar.";
+  const submitLabel = isEdit ? "Update" : "Submit";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-[#0B2D6B] via-[#1C56AE] to-[#2B7AD8] px-6 py-6">
-      <div className="max-w-[1400px] mx-auto">
-        <div className="rounded-[26px] border border-white/15 bg-white/10 backdrop-blur-2xl shadow-[0_24px_80px_rgba(0,0,0,0.25)] overflow-hidden">
-          {/* Top header */}
-          <div className="px-6 pt-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#0B2D6B] via-[#1C56AE] to-[#2B7AD8] px-4 py-6">
+      <div className="max-w-5xl mx-auto">
+        {/* Outer glass card */}
+        <div className="rounded-[26px] border border-white/15 bg-white/10 backdrop-blur-2xl shadow-[0_24px_80px_rgba(0,0,0,0.28)] overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/30 text-white hover:bg-white/20 transition"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <div>
+                <h1 className="text-white text-2xl font-extrabold tracking-wide">
+                  {title}
+                </h1>
+                <p className="text-sm text-white/75">{subtitle}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Body / Form */}
+          <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
+            {/* Alert error / success */}
+            {errorMsg && (
+              <div className="rounded-xl border border-red-300/60 bg-red-50/90 text-red-700 px-4 py-2 text-sm">
+                {errorMsg}
+              </div>
+            )}
+            {successMsg && (
+              <div className="rounded-xl border border-emerald-300/70 bg-emerald-50/90 text-emerald-700 px-4 py-2 text-sm flex items-center justify-between gap-3">
+                <span>{successMsg}</span>
                 <button
                   type="button"
                   onClick={() => navigate("/admin")}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 border border-white/15 px-3 py-2 text-white hover:bg-white/15 transition"
+                  className="text-xs font-semibold underline underline-offset-2"
                 >
-                  <ArrowLeft size={16} />
-                  <span className="text-sm font-semibold">Back</span>
+                  Kembali ke Daftar Menu
                 </button>
+              </div>
+            )}
 
-                <h1 className="text-white text-2xl md:text-3xl font-extrabold tracking-wide">
-                  Add Menu Baru
-                </h1>
+            {/* Nama Menu */}
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-1.5">
+                Nama Menu
+              </label>
+              <input
+                type="text"
+                value={namaMenu}
+                onChange={(e) => setNamaMenu(e.target.value)}
+                placeholder="Contoh: Nasi Ayam with Buldak Sauce"
+                className="w-full rounded-xl bg-white/12 border border-white/30 text-white placeholder:text-white/60 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/35"
+              />
+            </div>
+
+            {/* Tipe + Harga */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-white/90 mb-1.5">
+                  Tipe Menu
+                </label>
+
+                <div className="relative">
+                  <select
+                    value={tipeMenu}
+                    onChange={(e) => setTipeMenu(e.target.value)}
+                    className="w-full rounded-xl bg-white/12 border border-white/30 text-white text-sm px-4 py-3 pr-9 focus:outline-none focus:ring-2 focus:ring-white/35 appearance-none"
+                  >
+                    <option className="bg-[#1C56AE] text-white" value="">
+                      -- Pilih tipe menu --
+                    </option>
+                    <option className="bg-[#1C56AE] text-white" value="Main Course">
+                      Main Course
+                    </option>
+                    <option className="bg-[#1C56AE] text-white" value="Beverage">
+                      Beverage
+                    </option>
+                    <option className="bg-[#1C56AE] text-white" value="Snack">
+                      Snack
+                    </option>
+                  </select>
+
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/70">
+                    <ChevronDown size={16} />
+                  </span>
+                </div>
               </div>
 
-              {/* My Profile */}
-              <div className="relative" ref={profileRef}>
-                <button
-                  type="button"
-                  onClick={() => setProfileOpen((v) => !v)}
-                  className="flex items-center gap-3 rounded-2xl bg-white/10 border border-white/15 px-3 py-2 text-white hover:bg-white/15 transition"
-                >
-                  <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold">
-                    {avatarLetter}
-                  </span>
-                  <span className="text-sm font-semibold">{displayName}</span>
-                  <ChevronDown
-                    size={16}
-                    className={`opacity-80 transition ${
-                      profileOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
 
-                {profileOpen && (
-                  <div className="absolute right-0 mt-2 w-44 rounded-xl bg-[#0E3A7E]/95 border border-white/10 backdrop-blur-xl shadow-lg overflow-hidden z-50">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-white/90 hover:bg-white/10 transition"
-                    >
-                      <LogOut size={16} />
-                      Logout
-                    </button>
-                  </div>
-                )}
+              <div>
+                <label className="block text-sm font-semibold text-white/90 mb-1.5">
+                  Harga (IDR)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={harga}
+                  onChange={(e) => setHarga(e.target.value)}
+                  placeholder="Contoh: 15000"
+                  className="w-full rounded-xl bg-white/12 border border-white/30 text-white placeholder:text-white/60 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/35"
+                />
               </div>
             </div>
-          </div>
 
-          {/* Form card */}
-          <div className="px-6 pb-8 pt-5">
-            <div className="rounded-2xl border border-white/12 bg-white/8 p-6 md:p-8">
-              <form onSubmit={onSubmit} className="space-y-6">
-                {/* Nama Menu */}
-                <div>
-                  <label className="block text-white/90 text-sm font-semibold mb-2">
-                    Nama Menu
-                  </label>
+            {/* Stok */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-white/90 mb-1.5">
+                  Stok
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={stok}
+                  onChange={(e) => setStok(e.target.value)}
+                  placeholder="Contoh: 20"
+                  className="w-full rounded-xl bg-white/12 border border-white/30 text-white placeholder:text-white/60 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/35"
+                />
+              </div>
+            </div>
+
+            {/* Deskripsi */}
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-1.5">
+                Deskripsi
+              </label>
+              <textarea
+                value={deskripsi}
+                onChange={(e) => setDeskripsi(e.target.value)}
+                rows={4}
+                placeholder="Tuliskan deskripsi singkat menu, rasa, bahan utama, dsb."
+                className="w-full rounded-xl bg-white/12 border border-white/30 text-white placeholder:text-white/60 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/35 resize-none"
+              />
+            </div>
+
+            {/* Upload Gambar */}
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-1.5">
+                Gambar Menu
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-[1.6fr_minmax(0,1fr)] gap-4 items-stretch">
+                {/* Dropzone / chooser */}
+                <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-white/40 rounded-2xl bg-white/5 hover:bg-white/10 transition cursor-pointer px-4 py-6 text-center">
                   <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Nama menu..."
-                    className="w-full rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-white/55 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/30"
-                  />
-                </div>
-
-                {/* Tipe */}
-                <div>
-                  <label className="block text-white/90 text-sm font-semibold mb-2">
-                    Tipe
-                  </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className="w-full rounded-xl bg-white/10 border border-white/15 text-white text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/30"
-                  >
-                    {TYPE_OPTIONS.map((t) => (
-                      <option key={t} value={t} className="text-slate-900">
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Harga */}
-                <div>
-                  <label className="block text-white/90 text-sm font-semibold mb-2">
-                    Harga
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="Contoh: 25000"
-                    className="w-full rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-white/55 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/30"
-                  />
-                  <div className="mt-1 text-xs text-white/60">
-                    Preview: {formatIDR(price)}
-                  </div>
-                </div>
-
-                {/* Deskripsi */}
-                <div>
-                  <label className="block text-white/90 text-sm font-semibold mb-2">
-                    Deskripsi
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Deskripsi menu..."
-                    className="w-full rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-white/55 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/30 resize-none"
-                  />
-                </div>
-
-                {/* Stok */}
-                <div>
-                  <label className="block text-white/90 text-sm font-semibold mb-2">
-                    Stok
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value)}
-                    placeholder="Contoh: 50"
-                    className="w-full rounded-xl bg-white/10 border border-white/15 text-white placeholder:text-white/55 text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/30"
-                  />
-                </div>
-
-                {/* Gambar */}
-                <div>
-                  <label className="block text-white/90 text-sm font-semibold mb-2">
-                    Gambar
-                  </label>
-
-                  <input
-                    ref={fileRef}
                     type="file"
                     accept="image/*"
-                    className="hidden"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
                     onChange={handleFileChange}
                   />
+                  <UploadCloud className="mb-2 text-white/80" size={22} />
+                  <p className="text-sm text-white/90 font-medium">
+                    Pilih file atau drag &amp; drop
+                  </p>
+                  <p className="text-xs mt-1 text-white/65">
+                    Format gambar (JPG, PNG)
+                  </p>
+                  {imageFile && (
+                    <p className="mt-2 text-xs text-white/80">
+                      Dipilih:{" "}
+                      <span className="font-semibold">{imageFile.name}</span>
+                    </p>
+                  )}
+                  {!imageFile && isEdit && imagePreview && (
+                    <p className="mt-2 text-xs text-white/80">
+                      Menggunakan gambar yang sudah ada.
+                    </p>
+                  )}
+                </label>
 
-                  <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={`rounded-2xl border border-dashed ${
-                      dragOver ? "border-white/60" : "border-white/25"
-                    } bg-white/10 p-6 md:p-8 transition`}
-                  >
-                    <div className="flex flex-col md:flex-row items-center gap-6">
-                      {/* Preview */}
-                      <div className="w-full md:w-[220px]">
-                        <div className="aspect-square rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center overflow-hidden">
-                          {imagePreview ? (
-                            <img
-                              src={imagePreview}
-                              alt="preview"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center gap-2 text-white/70">
-                              <ImageIcon size={28} />
-                              <span className="text-xs">
-                                Preview gambar
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {imageFile && (
-                          <button
-                            type="button"
-                            onClick={removeImage}
-                            className="mt-3 w-full rounded-lg bg-white/10 border border-white/15 text-white/90 text-xs font-semibold py-2 hover:bg-white/15 transition"
-                          >
-                            Remove Image
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Upload text */}
-                      <div className="flex-1 text-center md:text-left">
-                        <div className="inline-flex items-center gap-2 rounded-xl bg-white/10 border border-white/15 px-3 py-2 text-white/90 text-sm font-semibold">
-                          <UploadCloud size={16} />
-                          Upload Image
-                        </div>
-
-                        <p className="mt-3 text-white/80 text-sm font-semibold">
-                          Choose file atau drag file ke area ini
-                        </p>
-                        <p className="mt-1 text-white/55 text-xs">
-                          Format disarankan: JPG/PNG/WebP.
-                        </p>
-
-                        <div className="mt-4">
-                          <button
-                            type="button"
-                            onClick={handlePickFile}
-                            className="rounded-xl bg-white text-[#16408F] font-semibold px-4 py-2.5 shadow hover:shadow-md transition"
-                          >
-                            Choose files
-                          </button>
-                        </div>
-                      </div>
+                {/* Preview */}
+                <div className="rounded-2xl border border-white/25 bg-white/10 flex items-center justify-center overflow-hidden">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Preview menu"
+                      className="w-full h-full max-h-52 object-cover"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-white/70 text-xs gap-2 p-4">
+                      <ImageIcon size={22} />
+                      <span>Preview gambar</span>
                     </div>
-                  </div>
+                  )}
                 </div>
-                
-                {/* Error */}
-                {errorMsg && (
-                  <div className="text-sm text-[#ffb4c7] bg-white/10 border border-white/10 rounded-xl px-4 py-3">
-                    {errorMsg}
-                  </div>
-                )}
-
-                {/* Submit */}
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    className={`w-full rounded-2xl py-3.5 text-sm font-semibold transition ${
-                      canSubmit
-                        ? "bg-white text-[#16408F] hover:brightness-95 shadow"
-                        : "bg-white/30 text-white/70 cursor-not-allowed"
-                    }`}
-                    disabled={!canSubmit}
-                  >
-                    Submit
-                  </button>
-                </div>
-              </form>
+              </div>
             </div>
-          </div>
+
+            {/* Button submit */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full md:w-auto px-8 py-3 rounded-2xl bg-white text-[#16408F] font-semibold text-sm shadow-lg hover:shadow-xl hover:bg-white/95 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {submitting ? "Menyimpan..." : submitLabel}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

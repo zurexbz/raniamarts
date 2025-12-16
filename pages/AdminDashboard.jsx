@@ -1,34 +1,19 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronDown, Pencil, Trash2, Plus, LogOut } from "lucide-react";
+import { Search, Pencil, Trash2, Plus } from "lucide-react";
+import ProfileMenu from "../components/ProfileMenu";
 
-const initialMenus = [
-  {
-    id: 1,
-    name: "Tteokbokki & Saus 100gr",
-    type: "Main Course",
-    price: 25000,
-    description: "Menu korea berbahan beras dengan saus gochujang yang pedas!",
-    stock: 24,
-    image: "menu/Tteokbokki.jpg",
-  },
-  {
-    id: 2,
-    name: "Caramel Machito",
-    type: "Beverage",
-    price: 15000,
-    description: "Kopi arabica dengan saus caramel yang manis dan menenangkan",
-    stock: 18,
-    image: "menu/caramel.jpg",
-  }
-];
+const API_BASE_URL = "http://localhost:8080/api/v1";
+
+const getAuthToken = () =>
+  localStorage.getItem("rm_token") || sessionStorage.getItem("rm_token");
 
 const formatIDR = (n) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(Number(n || 0));
 
 const MenuImage = ({ name, image }) => {
   if (image) {
@@ -41,7 +26,6 @@ const MenuImage = ({ name, image }) => {
     );
   }
 
-  // placeholder glass
   return (
     <div className="w-14 h-14 rounded-xl bg-white/70 border border-white/60 flex items-center justify-center text-[10px] font-semibold text-slate-500">
       IMG
@@ -51,51 +35,82 @@ const MenuImage = ({ name, image }) => {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  
-  // Handling Menu & Search
-  const [menus, setMenus] = useState(initialMenus);
+
+  const [menus, setMenus] = useState([]);
   const [search, setSearch] = useState("");
-  
-  // Handling Profile
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    const onClickOutside = (e) => {
-      if (!profileRef.current) return;
-      if (!profileRef.current.contains(e.target)) {
-        setProfileOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("rm_token");
-    localStorage.removeItem("rm_user");
-    sessionStorage.removeItem("rm_token");
-    sessionStorage.removeItem("rm_user");
-    navigate("/login");
-  };
-
-  // Profile Menu Display Name
   const [user, setUser] = useState(null);
-  
+
   useEffect(() => {
     const raw =
       localStorage.getItem("rm_user") || sessionStorage.getItem("rm_user");
-  
     try {
       setUser(raw ? JSON.parse(raw) : null);
     } catch {
       setUser(null);
     }
   }, []);
-  
-  const displayName = user?.name || "My Profile";
-  const avatarLetter = (user?.name || "U").charAt(0).toUpperCase();
 
+  useEffect(() => {
+    if (!user) return;
+    if (user.role && user.role.toLowerCase() !== "admin") {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    const fetchMenus = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      setLoading(true);
+      setErrorMsg("");
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/product`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          navigate("/login");
+          return;
+        }
+
+        const data = await res.json();
+        const list = (data.all_list_product || []).map((p) => ({
+          id: p.product_id,
+          name: p.nama_menu,
+          type: p.tipe_menu,
+          price: p.harga,
+          description: p.deskripsi,
+          stock: p.stok,
+          image: p.image_path
+            ? `${API_BASE_URL}/admin/product/${p.image_id}`
+            : null,
+        }));
+
+        setMenus(list);
+      } catch (err) {
+        console.error("Error fetch menu:", err);
+        setErrorMsg("Gagal mengambil data menu. Silakan coba lagi.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMenus();
+  }, [navigate]);
+
+  // FILTER PENCARIAN
   const filteredMenus = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return menus;
@@ -110,10 +125,42 @@ export default function AdminDashboard() {
     });
   }, [menus, search]);
 
-  const handleDelete = (menu) => {
+  // DELETE MENU
+  const handleDelete = async (menu) => {
     const ok = window.confirm(`Hapus menu "${menu.name}"?`);
     if (!ok) return;
-    setMenus((prev) => prev.filter((m) => m.id !== menu.id));
+
+    const token = getAuthToken();
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/admin/product/${menu.id}/delete`,
+        {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || (data && data.status && data.status >= 400)) {
+        throw new Error(data?.message || "Gagal menghapus menu");
+      }
+
+      setMenus((prev) => prev.filter((m) => m.id !== menu.id));
+    } catch (err) {
+      console.error("Error delete menu:", err);
+      setErrorMsg(
+        err.message || "Terjadi kesalahan saat menghapus menu. Coba lagi."
+      );
+    }
   };
 
   const handleAdd = () => {
@@ -121,7 +168,13 @@ export default function AdminDashboard() {
   };
 
   const handleEdit = (menu) => {
-    navigate("/admin/menus/new");
+    navigate("/admin/menus/new", {
+      state: {
+        mode: "edit",
+        productId: menu.id,
+        product: menu,
+      },
+    });
   };
 
   return (
@@ -136,38 +189,7 @@ export default function AdminDashboard() {
                 Daftar Menu
               </h1>
 
-              {/* My Profile */}
-              <div className="relative" ref={profileRef}>
-                <button
-                  type="button"
-                  onClick={() => setProfileOpen((v) => !v)}
-                  className="flex items-center gap-3 rounded-2xl bg-white/10 border border-white/15 px-3 py-2 text-white hover:bg-white/15 transition"
-                >
-                  <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold">
-                    {avatarLetter}
-                  </span>
-                  <span className="text-sm font-semibold">{displayName}</span>
-                  <ChevronDown
-                    size={16}
-                    className={`opacity-80 transition ${
-                      profileOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-
-                {profileOpen && (
-                  <div className="absolute right-0 mt-2 w-44 rounded-xl bg-[#0E3A7E]/95 border border-white/10 backdrop-blur-xl shadow-lg overflow-hidden z-50">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-white/90 hover:bg-white/10 transition"
-                    >
-                      <LogOut size={16} />
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
+              <ProfileMenu mode="admin" />
             </div>
 
             {/* Sub header controls */}
@@ -195,6 +217,13 @@ export default function AdminDashboard() {
                 />
               </div>
             </div>
+
+            {/* Error message */}
+            {errorMsg && (
+              <div className="mt-3 rounded-xl bg-red-500/10 border border-red-400/50 text-xs text-red-100 px-4 py-2">
+                {errorMsg}
+              </div>
+            )}
           </div>
 
           {/* Table container */}
@@ -216,7 +245,11 @@ export default function AdminDashboard() {
 
               {/* Table body */}
               <div className="max-h-[520px] overflow-auto">
-                {filteredMenus.length === 0 ? (
+                {loading ? (
+                  <div className="px-4 py-10 text-center text-white/80 text-sm">
+                    Memuat data menu...
+                  </div>
+                ) : filteredMenus.length === 0 ? (
                   <div className="px-4 py-10 text-center text-white/80 text-sm">
                     Data tidak ditemukan.
                   </div>
@@ -225,9 +258,7 @@ export default function AdminDashboard() {
                     <div
                       key={menu.id}
                       className={`grid grid-cols-[60px_90px_1.4fr_1fr_120px_1.8fr_90px_140px] gap-2 px-4 py-3 text-sm text-white/90 border-b border-white/5 ${
-                        idx % 2 === 0
-                          ? "bg-white/6"
-                          : "bg-white/10"
+                        idx % 2 === 0 ? "bg-white/6" : "bg-white/10"
                       }`}
                     >
                       <div className="flex items-center">{idx + 1}</div>
