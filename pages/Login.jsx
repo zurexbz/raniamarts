@@ -5,7 +5,7 @@ import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 // useState -> menyimpan state atau posisi terakhir dari suatu elemen
 // misal aku punya state untuk klik view password
 
-const API_BASE = "http://localhost:8080";
+const API_BASE = "http://localhost:8080/api/v1";
 
 // ------ CAROUSEL SLIDES DIISI DI SINI ------
 const slides = [
@@ -27,6 +27,7 @@ const Login = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
+  // useState dari remember didefault sebagai false
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -58,23 +59,38 @@ const Login = () => {
     setErrorMsg("");
     setLoading(true);
 
+    // konsep dari React JS dimana function atau method itu berjalan bergantian
+    // contohnya aku punya halaman kiri yang sudah ter-render
+    // tapi bagian kanan ini lebih berat
     try {
-      const res = await fetch(`${API_BASE}/api/v1/raniamarts/login`, {
+      // res -> mengirim data ke BE
+      // res mengirim email dan password
+      const res = await fetch(`${API_BASE}/raniamarts/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password: pwd }),
       });
 
+      // data -> mendapatkan data dari BE
+      // data mendapatkan token, id user, nama, role
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(
+          // logical operator OR
           data.message || "Login gagal, periksa kembali email & password kamu."
         );
       }
 
       // simpan token & info user
+      // konsep boleean, misalnya apakah remember bernilai true or false
+      // ketika remember bernilai true -> maka set di localStorage
+      // ketika remember bernilai false -> maka set di sessionStorage
       const storage = remember ? localStorage : sessionStorage;
+
+      // storage ini hanya menentukan dia itu disimpen dimana
+      // tapi belum mendapatkan value dari token itu sendiri
+
       storage.setItem("rm_token", data.token);
       storage.setItem(
         "rm_user",
@@ -85,12 +101,18 @@ const Login = () => {
         })
       );
 
+      // string yang didapetkan biar huruf kecil semua
       const role = (data.role || "").toLowerCase();
+
+      // misalkan huruf adminnya itu Admin
+      // dia tidak akan menjadi true karena Admin != admin
+      // kenapa tau ga? A = 65, a = 97
+      // d = 100, m = 109, i = 105, n = 110
+      // 65 + 100 + 109
       if (role === "admin") {
-        // nanti diupdate ketika sudah ada page admin <Route path="/admin" ...> di App.jsx
         navigate("/admin");
       } else {
-        navigate("/"); // user / role lain masuk ke home page
+        navigate("/");
       }
     } catch (err) {
       setErrorMsg(err.message);

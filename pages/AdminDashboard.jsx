@@ -3,17 +3,26 @@ import { useNavigate } from "react-router-dom";
 import { Search, Pencil, Trash2, Plus } from "lucide-react";
 import ProfileMenu from "../components/ProfileMenu";
 
+// Global variable untuk akses ke BE
+// API (Application Programming Interface)
 const API_BASE_URL = "http://localhost:8080/api/v1";
 
+// Function untuk otentikasi token dari user ketika login
+// Cek terlebih dahulu dari localStorage, apabila tidak ada maka coba akses sessionStorage
 const getAuthToken = () =>
+  // localStorage -> data yang selalu disimpen browser meskipun tab ditutup
+  // sessionStorage -> data yang selalu dihapus ketika tab ditutup
   localStorage.getItem("rm_token") || sessionStorage.getItem("rm_token");
 
+// Function yang kita buat untuk mengconvert dari numeric ke format mata uang
 const formatIDR = (n) =>
+  // format bawaan JS untuk convert mata uang berdasarkan locale
+  // Termasuk currency, pemisah ribuan, satuan, dll
   new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(Number(n || 0));
+  }).format(Number(n || 0)); // jika yang diterima adalah string/null maka akan diset 0
 
 const MenuImage = ({ name, image }) => {
   if (image) {
@@ -21,57 +30,69 @@ const MenuImage = ({ name, image }) => {
       <img
         src={image}
         alt={name}
-        className="w-14 h-14 rounded-xl object-cover bg-white/60"
+        // resize element agar mengcover background
+        className="w-14 h-14 rounded-xl object-containt bg-white/60"
       />
     );
   }
 
+  // default placeholder apabila image kosong
   return (
     <div className="w-14 h-14 rounded-xl bg-white/70 border border-white/60 flex items-center justify-center text-[10px] font-semibold text-slate-500">
-      IMG
+      RANIA
     </div>
   );
 };
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-
   const [menus, setMenus] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-
   const [user, setUser] = useState(null);
 
+  // useEffect pertama dijalankan sekali untuk set state user
+  // ketika user langsung inject link /admin, maka tetap harus divalidasi
   useEffect(() => {
     const raw =
+      // kita akan cek dulu dari localStorage apakah ada atau tidak
+      // jika tidak ada, maka cek di session storage
       localStorage.getItem("rm_user") || sessionStorage.getItem("rm_user");
     try {
+      // jika nemu di dua tempat tersebut, maka parse variable raw dan set ke user
       setUser(raw ? JSON.parse(raw) : null);
     } catch {
       setUser(null);
     }
   }, []);
 
+  // useEffect kedua dijalankan apabila terdapat perubahan atau user baru logiin
   useEffect(() => {
     if (!user) return;
-    if (user.role && user.role.toLowerCase() !== "admin") {
+    if (user.role && user.role.toLowerCase() !== "admin") { 
       navigate("/");
     }
   }, [user, navigate]);
 
+  // useEffect ketiga dijalankan ketika akan akses menus
   useEffect(() => {
     const fetchMenus = async () => {
+      // get token
       const token = getAuthToken();
       if (!token) {
         navigate("/login");
         return;
       }
-
+      
+      // set tampilan loading
       setLoading(true);
+      // hapus error message yang ada sebelumnya
       setErrorMsg("");
 
       try {
+        // await akan melakukan pause hingga data selesai diakses
+        // code FE tidak akan freeze
         const res = await fetch(`${API_BASE_URL}/admin/product`, {
           method: "GET",
           headers: {
@@ -80,11 +101,13 @@ export default function AdminDashboard() {
           },
         });
 
+        // 401 unauthorized, 403 forbidden error -> tidak punya akses
         if (res.status === 401 || res.status === 403) {
           navigate("/login");
           return;
         }
 
+        // ambil data dari BE
         const data = await res.json();
         const list = (data.all_list_product || []).map((p) => ({
           id: p.product_id,
@@ -97,7 +120,8 @@ export default function AdminDashboard() {
             ? `${API_BASE_URL}/admin/product/${p.image_id}`
             : null,
         }));
-
+        
+        // setMenus
         setMenus(list);
       } catch (err) {
         console.error("Error fetch menu:", err);
@@ -110,12 +134,15 @@ export default function AdminDashboard() {
     fetchMenus();
   }, [navigate]);
 
-  // FILTER PENCARIAN
+  // useMemo -> melakukan cache hasil pencarian
+  // tidak akan melakukan render ulang apabila tidak ada perubahan pada menus dan search
   const filteredMenus = useMemo(() => {
+    // hapus spasi dan buat huruf kecil
     const q = search.trim().toLowerCase();
     if (!q) return menus;
 
     return menus.filter((m) => {
+      // buat lower case
       return (
         m.name.toLowerCase().includes(q) ||
         m.type.toLowerCase().includes(q) ||
@@ -125,9 +152,9 @@ export default function AdminDashboard() {
     });
   }, [menus, search]);
 
-  // DELETE MENU
   const handleDelete = async (menu) => {
     const ok = window.confirm(`Hapus menu "${menu.name}"?`);
+    // stop
     if (!ok) return;
 
     const token = getAuthToken();
@@ -178,12 +205,14 @@ export default function AdminDashboard() {
   };
 
   return (
+    // 3 gradient color
     <div className="min-h-screen w-full bg-gradient-to-br from-[#0B2D6B] via-[#1C56AE] to-[#2B7AD8] px-6 py-6">
       {/* Outer glass shell */}
       <div className="max-w-[1400px] mx-auto">
         <div className="rounded-[26px] border border-white/15 bg-white/10 backdrop-blur-2xl shadow-[0_24px_80px_rgba(0,0,0,0.25)] overflow-hidden">
           {/* Header area */}
           <div className="px-6 pt-6">
+            {/* test gap */}
             <div className="flex items-center justify-between gap-4">
               <h1 className="text-white text-2xl md:text-3xl font-extrabold tracking-wide">
                 Daftar Menu
@@ -204,9 +233,9 @@ export default function AdminDashboard() {
                 Add Menu Baru
               </button>
 
-              {/* Search bar */}
+              {/* Search bar */}  
               <div className="w-full md:w-[340px] relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/70">
+                <span className="absolute pl-3 top-1/2 -translate-y-1/2 text-white/70">
                   <Search size={16} />
                 </span>
                 <input

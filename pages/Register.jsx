@@ -2,9 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Phone, User as UserIcon } from "lucide-react";
 
-// useState -> menyimpan state atau posisi terakhir dari suatu elemen
-// misal aku punya state untuk klik view password
-
 const API_BASE = "http://localhost:8080";
 
 // Carousel

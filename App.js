@@ -1,6 +1,8 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 
+import { CartProvider } from "./context/CartContext";
+
 import Header from "./components/Header";
 import Carousel from "./components/Carousel";
 import CategoryList from "./components/CategoryList";
@@ -9,6 +11,9 @@ import Footer from "./components/Footer";
 
 import AllMenu from "./pages/AllMenu";
 import MenuDetail from "./pages/MenuDetail";
+
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -22,7 +27,7 @@ const Home = () => (
       <Header />
       <hr className="border-gray-200" />
       <Carousel />
-      <CategoryList />
+      <CategoryList />  
       <BestSeller />
       <Footer />
     </div>
@@ -30,24 +35,29 @@ const Home = () => (
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Homepage */}
-        <Route path="/" element={<Home />}/> { /* Page 1: Route untuk home page localhost:3000 */}
-        <Route path="/menu-terlaris" element={<AllMenu />} />
-        <Route path="/menu/:id" element={<MenuDetail />} />
-        <Route path="/menus" element={<AllMenu />} />
+    <CartProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Homepage */}
+          <Route path="/" element={<Home />}/> { /* Page 1: Route untuk home page localhost:3000 */}
+          <Route path="/menu-terlaris" element={<AllMenu />} />
+          <Route path="/menu/:id" element={<MenuDetail />} />
+          <Route path="/menus" element={<AllMenu />} />
 
-        {/* User Setting */}
-        <Route path="/login" element={<Login />}/> { /* Page 2: Halaman login page localhost:3000/login */}
-        <Route path="/register" element={<Register />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
 
-        {/* Admin */}
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/menus/new" element={<AddMenu />} />
-      </Routes>
-    </BrowserRouter>
+          {/* User Setting */}
+          <Route path="/login" element={<Login />}/> { /* Page 2: Halaman login page localhost:3000/login */}
+          <Route path="/register" element={<Register />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* Admin */}
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/menus/new" element={<AddMenu />} />
+        </Routes>
+      </BrowserRouter>
+    </CartProvider>
   );
 }
 

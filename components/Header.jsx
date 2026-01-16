@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { ShoppingCart, User, Search, ChevronDown, LogOut, LayoutDashboard, Home as HomeIcon } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useCart } from "../context/CartContext";
 
 const API_BASE_URL = "http://localhost:8080/api/v1";
 
 const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const { cartQty, refreshCart, clearCartState } = useCart();
 
   const [userData, setUserData] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -16,25 +19,38 @@ const Header = () => {
     const raw =
       localStorage.getItem("rm_user") || sessionStorage.getItem("rm_user");
 
-    if (!raw) return;
+    if (!raw) {
+      setUserData(null);
+      return;
+    }
 
     try {
       const parsed = JSON.parse(raw);
       setUserData(parsed);
     } catch (err) {
       console.error("Gagal parse rm_user:", err);
+      setUserData(null);
     }
-  }, []);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (userData) refreshCart();
+    else clearCartState();
+  }, [userData, refreshCart, clearCartState]);
 
   const handleLogout = () => {
     localStorage.removeItem("rm_user");
     sessionStorage.removeItem("rm_user");
+    localStorage.removeItem("rm_token");
+    sessionStorage.removeItem("rm_token");
+
     setUserData(null);
     setProfileOpen(false);
+    clearCartState();
     navigate("/login");
   };
 
-  const isAdmin = userData?.role === "admin"; 
+  const isAdmin = userData?.role === "admin";
 
   const [query, setQuery] = useState("");
   const [allMenus, setAllMenus] = useState([]);
@@ -48,17 +64,10 @@ const Header = () => {
     const fetchMenus = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/home`);
-        if (!res.ok) {
-          console.error("Gagal fetch /home untuk search, status:", res.status);
-          return;
-        }
+        if (!res.ok) return;
 
         const data = await res.json();
-        const all =
-          data.all_list_product ||
-          data.AllListProduct ||
-          data.data ||
-          [];
+        const all = data.all_list_product || data.AllListProduct || data.data || [];
 
         const mapped = all.map((p) => ({
           id: p.product_id || p.id,
@@ -120,11 +129,9 @@ const Header = () => {
   const onProfilePrimaryClick = () => {
     if (!isAdmin) return;
 
-    if (location.pathname.startsWith("/admin")) {
-      navigate("/");
-    } else {
-      navigate("/admin");
-    }
+    if (location.pathname.startsWith("/admin")) navigate("/");
+    else navigate("/admin");
+
     setProfileOpen(false);
   };
 
@@ -192,7 +199,6 @@ const Header = () => {
         </div>
 
         <div className="flex gap-4 items-center">
-          {/* PROFILE */}
           <div className="relative" ref={profileRef}>
             {!userData ? (
               <Link
@@ -221,9 +227,7 @@ const Header = () => {
                 {profileOpen && (
                   <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white border border-gray-200 shadow-lg py-2 text-sm z-40">
                     <div className="px-3 pb-2 border-b border-gray-100">
-                      <p className="font-medium text-gray-800">
-                        {userData.name}
-                      </p>
+                      <p className="font-medium text-gray-800">{userData.name}</p>
                     </div>
 
                     {isAdmin && (
@@ -239,10 +243,7 @@ const Header = () => {
                           </>
                         ) : (
                           <>
-                            <LayoutDashboard
-                              size={16}
-                              className="text-sky-600"
-                            />
+                            <LayoutDashboard size={16} className="text-sky-600" />
                             <span>Dashboard Admin</span>
                           </>
                         )}
@@ -263,11 +264,20 @@ const Header = () => {
             )}
           </div>
 
-          {/* CART */}
-          <button className="flex items-center gap-2 text-sm font-medium text-slate-800 hover:text-slate-900">
-            <ShoppingCart size={22} />
+          <Link
+            to="/cart"
+            className="flex items-center gap-2 text-sm font-medium text-slate-800 hover:text-slate-900"
+          >
+            <span className="relative inline-flex">
+              <ShoppingCart size={22} />
+              {cartQty > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] leading-[18px] text-center font-semibold">
+                  {cartQty}
+                </span>
+              )}
+            </span>
             <span className="hidden sm:inline">Cart</span>
-          </button>
+          </Link>
         </div>
       </div>
     </header>

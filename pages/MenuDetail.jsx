@@ -2,16 +2,19 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { useCart } from "../context/CartContext";
 
 const API_BASE_URL = "http://localhost:8080/api/v1";
 
 const MenuDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addToCart } = useCart();
 
   const [menu, setMenu] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -76,8 +79,39 @@ const MenuDetail = () => {
     }
   };
 
-  const handleAddToCart = () => {
-    alert("Fitur keranjang akan ditambahkan nanti");
+  const outOfStock = useMemo(() => maxStock === 0, [maxStock]);
+
+  const handleAddToCart = async () => {
+    if (!menu) return;
+
+    if (outOfStock) {
+      alert("Stok habis.");
+      return;
+    }
+
+    if (maxStock && qty > maxStock) {
+      alert(`Qty melebihi stok. Maksimal ${maxStock}.`);
+      return;
+    }
+
+    setAdding(true);
+    try {
+      const res = await addToCart(menu.id, qty);
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          alert("Silakan login dulu untuk menambahkan ke keranjang.");
+          navigate("/login");
+          return;
+        }
+        alert(res.message || "Gagal menambahkan ke keranjang.");
+        return;
+      }
+
+      alert("Berhasil ditambahkan ke keranjang.");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleBuyNow = () => {
@@ -91,6 +125,7 @@ const MenuDetail = () => {
     if (!menu || typeof menu.price !== "number") return 0;
     return menu.price * qty;
   }, [menu, qty]);
+  
 
   const handleBack = () => {
     navigate(-1);
@@ -241,9 +276,14 @@ const MenuDetail = () => {
                 <button
                   type="button"
                   onClick={handleAddToCart}
-                  className="w-full mb-3 py-3 rounded-full bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition"
+                  disabled={outOfStock || adding}
+                  className={`w-full mb-3 py-3 rounded-full text-white text-sm font-semibold transition ${
+                    outOfStock || adding
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-sky-600 hover:bg-sky-700"
+                  }`}
                 >
-                  + Keranjang
+                  {adding ? "Menambahkan..." : "+ Keranjang"}
                 </button>
                 <button
                   type="button"
