@@ -489,10 +489,6 @@ export default function Checkout() {
                       </span>
                     </div>
                   </div>
-
-                  <p className="mt-4 text-xs text-slate-500">
-                    Pembayaran hanya dummy, order langsung diterima & receipt PDF dibuat.
-                  </p>
                 </div>
               </aside>
             </div>
