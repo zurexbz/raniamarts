@@ -21,6 +21,7 @@ import ResetPassword from "./pages/ResetPassword";
 
 import AdminDashboard from "./pages/AdminDashboard";
 import AddMenu from "./pages/AdminAddMenu";
+import AdminSalesReport from "./pages/AdminSalesReport";
 
 const Home = () => (
     <div className="font-sans bg-white text-gray-800">
@@ -55,6 +56,7 @@ function App() {
           {/* Admin */}
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/menus/new" element={<AddMenu />} />
+          <Route path="/admin/reports/sales" element={<AdminSalesReport />} />
         </Routes>
       </BrowserRouter>
     </CartProvider>

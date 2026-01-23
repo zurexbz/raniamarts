@@ -40,9 +40,6 @@ export default function Cart() {
 
       const list =
         json?.all_list_product ||
-        json?.AllListProduct ||
-        json?.data ||
-        json?.Data ||
         [];
 
       const lookup = {};
